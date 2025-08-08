@@ -2,6 +2,20 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 
+# Configuration management
+pydantic-settings==2.5.2
+
+# Audio/Video processing
+yt-dlp==2023.12.30
+ffmpeg-python==0.2.0PI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Audio/Video processing
+yt-dlp>=2025.7.21
+ffmpeg-python==0.2.0
+browser-cookie3==0.19.1
+
 # # HTTP requests for Notion API
 # requests==2.31.0
 
