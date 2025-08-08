@@ -1,0 +1,417 @@
+import yt_dlp
+import os
+import tempfile
+from typing import Optional, Dict, Any
+from pathlib import Path
+import logging
+
+# Set up logging
+logger = logging.getLogger(__name__)
+
+class AudioExtractor:
+    """Service for extracting audio from video URLs using yt-dlp"""
+    
+    def __init__(self, output_dir: Optional[str] = None, instagram_username: Optional[str] = None, instagram_password: Optional[str] = None):
+        """
+        Initialize the AudioExtractor
+        
+        Args:
+            output_dir: Directory to save extracted audio files. 
+                       If None, uses system temp directory.
+            instagram_username: Instagram username for authentication
+            instagram_password: Instagram password for authentication
+        """
+        # Set default output directory to a more accessible location
+        if output_dir is None:
+            output_dir = os.path.join(os.path.expanduser("~"), "Downloads", "extracted_audio")
+        
+        self.output_dir = output_dir
+        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
+        self.instagram_username = instagram_username
+        self.instagram_password = instagram_password
+    
+    def extract_audio_from_url(
+        self, 
+        url: str, 
+        audio_format: str = 'mp3',
+        quality: str = 'best'
+    ) -> Dict[str, Any]:
+        """
+        Extract audio from a video URL (Instagram Reel, YouTube, TikTok, etc.)
+        
+        Args:
+            url: The video URL to extract audio from
+            audio_format: Audio format (mp3, wav, m4a, etc.)
+            quality: Audio quality ('best', 'worst', or specific bitrate)
+        
+        Returns:
+            Dict containing:
+                - success: bool
+                - file_path: str (path to extracted audio file)
+                - title: str (video title)
+                - duration: float (duration in seconds)
+                - error: str (if any error occurred)
+        """
+        try:
+            # Configure yt-dlp options
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'extractaudio': True,
+                'audioformat': audio_format,
+                'audioquality': quality,
+                'outtmpl': os.path.join(self.output_dir, '%(title)s.%(ext)s'),
+                'noplaylist': True,
+                'writeinfojson': False,
+                'writesubtitles': False,
+                'writeautomaticsub': False,
+                'ignoreerrors': False,
+                'ffmpeg_location': '/opt/homebrew/bin/ffmpeg',  # Specify ffmpeg path
+            }
+            
+            # Add Instagram authentication if provided
+            if self.instagram_username and self.instagram_password:
+                ydl_opts['username'] = self.instagram_username
+                ydl_opts['password'] = self.instagram_password
+            
+            # Alternative: Use cookies from browser (more reliable for Instagram)
+            # Uncomment the line below to use cookies from your browser
+            # ydl_opts['cookiesfromdrawser'] = 'chrome'  # or 'firefox', 'safari'
+            
+            # Add post-processor for audio conversion
+            ydl_opts['postprocessors'] = [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': audio_format,
+                'preferredquality': '192' if quality == 'best' else quality,
+            }]
+            
+            result = {
+                'success': False,
+                'file_path': None,
+                'title': None,
+                'duration': None,
+                'error': None
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # Extract video info first
+                logger.info(f"Extracting info for URL: {url}")
+                info = ydl.extract_info(url, download=False)
+                
+                if not info:
+                    result['error'] = "Could not extract video information"
+                    return result
+                
+                # Get video details
+                title = info.get('title', 'Unknown')
+                duration = info.get('duration', 0)
+                
+                logger.info(f"Video found: {title} ({duration}s)")
+                
+                # Download and extract audio
+                logger.info("Downloading and extracting audio...")
+                ydl.download([url])
+                
+                # Construct expected file path
+                safe_title = self._sanitize_filename(title)
+                audio_file = os.path.join(self.output_dir, f"{safe_title}.{audio_format}")
+                
+                # Check if file was created (try multiple possible filenames)
+                possible_paths = [
+                    audio_file,
+                    os.path.join(self.output_dir, f"{title}.{audio_format}"),
+                    os.path.join(self.output_dir, f"{title}.mp3"),
+                ]
+                
+                found_file = None
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        found_file = path
+                        break
+                
+                if found_file:
+                    result.update({
+                        'success': True,
+                        'file_path': found_file,
+                        'title': title,
+                        'duration': duration
+                    })
+                    logger.info(f"Audio extracted successfully: {found_file}")
+                else:
+                    # Try to find the file with glob pattern
+                    possible_files = list(Path(self.output_dir).glob(f"*{safe_title}*.{audio_format}"))
+                    if not possible_files:
+                        # Try with original title
+                        possible_files = list(Path(self.output_dir).glob(f"*{title}*.{audio_format}"))
+                    if not possible_files:
+                        # Try any mp3 files
+                        possible_files = list(Path(self.output_dir).glob(f"*.{audio_format}"))
+                    
+                    if possible_files:
+                        result.update({
+                            'success': True,
+                            'file_path': str(possible_files[0]),
+                            'title': title,
+                            'duration': duration
+                        })
+                        logger.info(f"Audio extracted successfully: {possible_files[0]}")
+                    else:
+                        result['error'] = f"Audio file not found after extraction. Expected: {audio_file}, Searched in: {self.output_dir}"
+                
+                return result
+                
+        except yt_dlp.DownloadError as e:
+            error_msg = f"Download error: {str(e)}"
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'file_path': None,
+                'title': None,
+                'duration': None,
+                'error': error_msg
+            }
+        except Exception as e:
+            error_msg = f"Unexpected error: {str(e)}"
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'file_path': None,
+                'title': None,
+                'duration': None,
+                'error': error_msg
+            }
+    
+    def extract_audio_from_instagram_reel(self, reel_url: str, use_browser_cookies: bool = True) -> Dict[str, Any]:
+        """
+        Specifically extract audio from Instagram Reel with enhanced authentication
+        
+        Args:
+            reel_url: Instagram Reel URL
+            use_browser_cookies: Whether to try using browser cookies first
+        
+        Returns:
+            Same as extract_audio_from_url
+        """
+        logger.info(f"Extracting audio from Instagram Reel: {reel_url}")
+        
+        # Try multiple authentication methods for Instagram
+        auth_methods = []
+        
+        if use_browser_cookies:
+            # Method 1: Try browser cookies
+            auth_methods.extend([
+                {'cookiesfrombrowser': ('chrome',)},
+                {'cookiesfrombrowser': ('firefox',)},
+                {'cookiesfrombrowser': ('safari',)},
+            ])
+        
+        # Method 2: Username/password if provided
+        if self.instagram_username and self.instagram_password:
+            auth_methods.append({
+                'username': self.instagram_username,
+                'password': self.instagram_password
+            })
+        
+        # Method 3: No authentication (might work for some public content)
+        auth_methods.append({})
+        
+        # Try each authentication method
+        for i, auth_opts in enumerate(auth_methods):
+            try:
+                logger.info(f"Trying authentication method {i+1}/{len(auth_methods)}")
+                
+                # Configure yt-dlp options with current auth method
+                ydl_opts = {
+                    'format': 'bestaudio/best',
+                    'extractaudio': True,
+                    'audioformat': 'mp3',
+                    'audioquality': 'best',
+                    'outtmpl': os.path.join(self.output_dir, '%(title)s.%(ext)s'),
+                    'noplaylist': True,
+                    'writeinfojson': False,
+                    'writesubtitles': False,
+                    'writeautomaticsub': False,
+                    'ignoreerrors': False,
+                    'ffmpeg_location': '/opt/homebrew/bin/ffmpeg',  # Specify ffmpeg path
+                }
+                
+                # Add authentication options
+                ydl_opts.update(auth_opts)
+                
+                # Add post-processor for audio conversion
+                ydl_opts['postprocessors'] = [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }]
+                
+                result = {
+                    'success': False,
+                    'file_path': None,
+                    'title': None,
+                    'duration': None,
+                    'error': None
+                }
+                
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    # Extract video info first
+                    info = ydl.extract_info(reel_url, download=False)
+                    
+                    if not info:
+                        continue  # Try next auth method
+                    
+                    # Get video details
+                    title = info.get('title', 'Unknown')
+                    duration = info.get('duration', 0)
+                    
+                    logger.info(f"Video found: {title} ({duration}s)")
+                    
+                    # Download and extract audio
+                    logger.info("Downloading and extracting audio...")
+                    ydl.download([reel_url])
+                    
+                    # Construct expected file path
+                    safe_title = self._sanitize_filename(title)
+                    audio_file = os.path.join(self.output_dir, f"{safe_title}.mp3")
+                    
+                    # Check if file was created
+                    if os.path.exists(audio_file):
+                        result.update({
+                            'success': True,
+                            'file_path': audio_file,
+                            'title': title,
+                            'duration': duration
+                        })
+                        logger.info(f"Audio extracted successfully: {audio_file}")
+                        return result
+                    else:
+                        # Try to find the file with different naming
+                        possible_files = list(Path(self.output_dir).glob(f"*{safe_title}*.mp3"))
+                        if possible_files:
+                            result.update({
+                                'success': True,
+                                'file_path': str(possible_files[0]),
+                                'title': title,
+                                'duration': duration
+                            })
+                            logger.info(f"Audio extracted successfully: {possible_files[0]}")
+                            return result
+                
+            except yt_dlp.DownloadError as e:
+                logger.warning(f"Authentication method {i+1} failed: {str(e)}")
+                continue
+            except Exception as e:
+                logger.warning(f"Authentication method {i+1} failed with error: {str(e)}")
+                continue
+        
+        # If all methods failed
+        return {
+            'success': False,
+            'file_path': None,
+            'title': None,
+            'duration': None,
+            'error': 'All authentication methods failed. Instagram content requires login. Please check your credentials or try using browser cookies.'
+        }
+    
+    def get_video_info(self, url: str) -> Dict[str, Any]:
+        """
+        Get video information without downloading
+        
+        Args:
+            url: Video URL
+        
+        Returns:
+            Dict with video metadata
+        """
+        try:
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                
+                return {
+                    'success': True,
+                    'title': info.get('title'),
+                    'duration': info.get('duration'),
+                    'uploader': info.get('uploader'),
+                    'upload_date': info.get('upload_date'),
+                    'view_count': info.get('view_count'),
+                    'description': info.get('description'),
+                    'thumbnail': info.get('thumbnail'),
+                }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    def cleanup_file(self, file_path: str) -> bool:
+        """
+        Remove extracted audio file
+        
+        Args:
+            file_path: Path to the file to remove
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logger.info(f"Cleaned up file: {file_path}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error cleaning up file {file_path}: {e}")
+            return False
+    
+    def _sanitize_filename(self, filename: str) -> str:
+        """
+        Sanitize filename for safe file system usage
+        
+        Args:
+            filename: Original filename
+        
+        Returns:
+            Sanitized filename
+        """
+        import re
+        # Remove or replace problematic characters
+        sanitized = re.sub(r'[<>:"/\\|?*]', '_', filename)
+        sanitized = re.sub(r'\s+', '_', sanitized)  # Replace spaces with underscores
+        return sanitized[:100]  # Limit length
+
+
+# Example usage and testing functions
+async def extract_reel_audio(reel_url: str) -> Dict[str, Any]:
+    """
+    Convenience function to extract audio from Instagram Reel
+    
+    Args:
+        reel_url: Instagram Reel URL
+    
+    Returns:
+        Extraction result
+    """
+    extractor = AudioExtractor()
+    return extractor.extract_audio_from_instagram_reel(reel_url)
+
+
+if __name__ == "__main__":
+    # Test the extractor
+    extractor = AudioExtractor()
+    
+    # Example Instagram Reel URL (replace with actual URL for testing)
+    test_url = "https://www.instagram.com/reel/example_reel_id/"
+    
+    print("Testing audio extraction...")
+    result = extractor.extract_audio_from_url(test_url)
+    
+    if result['success']:
+        print(f"✅ Success! Audio saved to: {result['file_path']}")
+        print(f"📝 Title: {result['title']}")
+        print(f"⏱️ Duration: {result['duration']}s")
+    else:
+        print(f"❌ Error: {result['error']}")

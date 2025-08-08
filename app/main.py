@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from app.routers import audio
 # from app.routers import notes, auth
 # from app.config import settings
 
@@ -10,6 +11,7 @@ app = FastAPI(
 )
 
 # Include routers
+app.include_router(audio.router, prefix="/api/v1/audio", tags=["audio"])
 # app.include_router(notes.router, prefix="/api/v1/notes", tags=["notes"])
 # app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
 
