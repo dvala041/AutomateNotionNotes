@@ -23,10 +23,7 @@ class AudioExtractor:
         """
         # Set default output directory to a more accessible location
         if output_dir is None:
-            
-            #change this to a temp directory
-            # output_dir = tempfile.gettempdir()
-            output_dir = os.path.join(os.path.expanduser("~"), "Downloads", "extracted_audio")
+            output_dir = tempfile.gettempdir()
         
         self.output_dir = output_dir
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)

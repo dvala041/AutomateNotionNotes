@@ -25,8 +25,9 @@ async def extract_audio_from_url(request: AudioExtractionRequest):
     """
     Extract audio from a video URL (Instagram Reel, YouTube, TikTok, etc.)
     """
+    output_dir = os.path.join(os.path.expanduser("~"), "Downloads", "extracted_audio")
     try:
-        extractor = AudioExtractor()
+        extractor = AudioExtractor(output_dir=output_dir)
         result = extractor.extract_audio_from_url(
             url=str(request.url),
             audio_format=request.audio_format,
