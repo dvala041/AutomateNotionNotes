@@ -5,6 +5,9 @@ class Settings(BaseSettings):
     # App settings
     app_name: str = "Automate Notion Notes API"
     debug: bool = False
+
+    #OpenAI API settings
+    openai_api_key: str = ""
     
     # Notion API settings
     notion_api_key: str = ""

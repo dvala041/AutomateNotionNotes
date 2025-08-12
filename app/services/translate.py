@@ -1,14 +1,17 @@
 from openai import OpenAI
+from app.config import settings as config
+import os
 
 if __name__ == "__main__":
-    client = OpenAI()
-    audio_file= open("~/Downloads/extracted_audio/Video by productplaybook_.mp3", "rb")
+    client = OpenAI(api_key=config.openai_api_key)
+
+    audio_path = os.path.expanduser("~/Downloads/extracted_audio/Video by calltoleap.mp3")
+    audio_file= open(audio_path, "rb")
 
     transcription = client.audio.transcriptions.create(
         model="gpt-4o-transcribe",  
         file=audio_file,
-        prompt="I am a 20 year old interested in personal finance, entrepreneurship, and self-improvement. I want to learn more about these topics. Please summarize the audio content in a way that is engaging and informative for someone with my interests."
-        #stream=True  # May prove helpful for showing real-time transcription updates
+        # stream=True  # May prove helpful for showing real-time transcription updates
     )
 
     print(transcription.text)
