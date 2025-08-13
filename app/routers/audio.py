@@ -64,7 +64,7 @@ async def extract_audio_from_url(request: AudioExtractionRequest):
         summary = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that summarizes content for a 20 year old male interested in personal finance, Computer Science, entrepreneurship, and self-improvement. Create concise summaries - no filler. Follow Notion formatting guidelines."},
+                {"role": "system", "content": "You are a helpful assistant that summarizes content for a 20 year old male interested in personal finance, Computer Science, entrepreneurship, and self-improvement. Create concise summaries - no filler (especially any sponsoring). Follow Notion formatting guidelines."},
                 {"role": "user", "content": f"Please summarize this transcript focusing on key takeaways:\n\n{transcription.text}"}
             ],
             max_tokens=dynamic_max_tokens,
