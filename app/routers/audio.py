@@ -6,6 +6,7 @@ import os
 import shutil
 from openai import OpenAI
 from app.services.extractAudio import AudioExtractor
+from app.services.notion import NotionService
 from app.config import settings as config
 
 router = APIRouter()
@@ -14,6 +15,8 @@ class AudioExtractionRequest(BaseModel):
     url: HttpUrl
     audio_format: Optional[str] = "mp3"
     quality: Optional[str] = "best"
+    notion_database_id: Optional[str] = None  # Optional: specific database ID
+    notion_page_title: Optional[str] = None   # Optional: custom title for the page
 
 class AudioExtractionResponse(BaseModel):
     success: bool
@@ -21,6 +24,8 @@ class AudioExtractionResponse(BaseModel):
     duration: Optional[float] = None
     transcript: Optional[str] = None
     summary: Optional[str] = None
+    notion_page_id: Optional[str] = None
+    notion_page_url: Optional[str] = None
     error: Optional[str] = None
 
 @router.post("/extract", response_model=AudioExtractionResponse)
@@ -71,12 +76,44 @@ async def extract_audio_from_url(request: AudioExtractionRequest):
             temperature=0.3
         )
         
+        # Optional: Save to Notion if database_id is provided
+        notion_page_id = None
+        notion_page_url = None
+        
+        if request.notion_database_id or config.notion_database_id:
+            try:
+                notion_service = NotionService()
+                database_id = request.notion_database_id or config.notion_database_id
+                
+                # Create page title
+                page_title = request.notion_page_title or f"Summary: {result['title']}" or "Video Summary"
+                
+                notion_result = notion_service.create_page_in_database(
+                    database_id=database_id,
+                    title=page_title,
+                    summary=summary.choices[0].message.content,
+                    transcript=transcription.text,
+                    video_url=str(request.url),
+                    duration=result['duration'],
+                    video_title=result['title']
+                )
+                
+                if notion_result['success']:
+                    notion_page_id = notion_result['page_id']
+                    notion_page_url = notion_result['page_url']
+                    
+            except Exception as notion_error:
+                # Don't fail the whole request if Notion fails
+                pass
+        
         return AudioExtractionResponse(
             success=True,
             title=result['title'],
             duration=result['duration'],
             transcript=transcription.text,
-            summary=summary.choices[0].message.content
+            summary=summary.choices[0].message.content,
+            notion_page_id=notion_page_id,
+            notion_page_url=notion_page_url
         )
     
     except HTTPException:
@@ -115,4 +152,50 @@ async def get_video_info(url: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get video info: {str(e)}"
+        )
+
+@router.get("/notion/databases")
+async def list_notion_databases():
+    """
+    List all Notion databases available to the integration
+    """
+    try:
+        notion_service = NotionService()
+        result = notion_service.list_databases()
+        
+        if result['success']:
+            return result
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result['error']
+            )
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list Notion databases: {str(e)}"
+        )
+
+@router.get("/notion/database/{database_id}/properties")
+async def get_database_properties(database_id: str):
+    """
+    Get the properties schema of a specific Notion database
+    """
+    try:
+        notion_service = NotionService()
+        result = notion_service.get_database_properties(database_id)
+        
+        if result['success']:
+            return result
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result['error']
+            )
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get database properties: {str(e)}"
         )

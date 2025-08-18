@@ -5,6 +5,9 @@ uvicorn[standard]==0.24.0
 # Configuration management
 pydantic-settings==2.5.2
 
+# Notion API
+notion-client==2.2.1
+
 # Audio/Video processing
 yt-dlp==2023.12.30
 ffmpeg-python==0.2.0PI and server
