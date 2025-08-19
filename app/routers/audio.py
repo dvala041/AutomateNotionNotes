@@ -61,8 +61,11 @@ async def extract_audio_from_url(request: AudioExtractionRequest):
         # Optional: Save to Notion if database_id is provided
         notion_page_id = None
         notion_page_url = None
-        
+
+        print("Config Notion Database ID:", config.notion_database_id)
+
         if request.notion_database_id or config.notion_database_id:
+            print("Saving to Notion...")
             try:
                 notion_service = NotionService()
                 database_id = request.notion_database_id or config.notion_database_id
@@ -86,6 +89,10 @@ async def extract_audio_from_url(request: AudioExtractionRequest):
                     
             except Exception as notion_error:
                 # Don't fail the whole request if Notion fails
+                print(f"Failed to save to Notion: {str(notion_error)}")
+                print(f"Notion error type: {type(notion_error)}")
+                import traceback
+                print(f"Notion error traceback: {traceback.format_exc()}")
                 pass
         
         return AudioExtractionResponse(

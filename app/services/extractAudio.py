@@ -241,34 +241,3 @@ class AudioExtractor:
         return sanitized[:100]  # Limit length
 
 
-# # Example usage and testing functions
-# async def extract_reel_audio(reel_url: str) -> Dict[str, Any]:
-#     """
-#     Convenience function to extract audio from Instagram Reel
-    
-#     Args:
-#         reel_url: Instagram Reel URL
-    
-#     Returns:
-#         Extraction result
-#     """
-#     extractor = AudioExtractor()
-#     return extractor.extract_audio_from_instagram_reel(reel_url)
-
-
-# if __name__ == "__main__":
-#     # Test the extractor
-#     extractor = AudioExtractor()
-    
-#     # Example Instagram Reel URL (replace with actual URL for testing)
-#     test_url = "https://www.instagram.com/reel/example_reel_id/"
-    
-#     print("Testing audio extraction...")
-#     result = extractor.extract_audio_from_url(test_url)
-    
-#     if result['success']:
-#         print(f"✅ Success! Audio saved to: {result['file_path']}")
-#         print(f"📝 Title: {result['title']}")
-#         print(f"⏱️ Duration: {result['duration']}s")
-#     else:
-#         print(f"❌ Error: {result['error']}")
