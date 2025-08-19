@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, HttpUrl
-from typing import Optional
+from app.models.audio import AudioExtractionRequest, AudioExtractionResponse
 import tempfile
 import os
 import shutil
@@ -10,23 +9,6 @@ from app.services.notion import NotionService
 from app.config import settings as config
 
 router = APIRouter()
-
-class AudioExtractionRequest(BaseModel):
-    url: HttpUrl
-    audio_format: Optional[str] = "mp3"
-    quality: Optional[str] = "best"
-    notion_database_id: Optional[str] = None  # Optional: specific database ID
-    notion_page_title: Optional[str] = None   # Optional: custom title for the page
-
-class AudioExtractionResponse(BaseModel):
-    success: bool
-    title: Optional[str] = None
-    duration: Optional[float] = None
-    transcript: Optional[str] = None
-    summary: Optional[str] = None
-    notion_page_id: Optional[str] = None
-    notion_page_url: Optional[str] = None
-    error: Optional[str] = None
 
 @router.post("/extract", response_model=AudioExtractionResponse)
 async def extract_audio_from_url(request: AudioExtractionRequest):
