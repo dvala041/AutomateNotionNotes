@@ -21,9 +21,9 @@ class NotionService:
         Create a new page in a Notion database with the summarized content
         """
         try:
-            # Prepare properties for the new page
+            # Prepare properties for the new page based on the actual database schema
             properties = {
-                "Title": {
+                "Name": {
                     "title": [
                         {
                             "text": {
@@ -32,47 +32,107 @@ class NotionService:
                         }
                     ]
                 },
-                "Video URL": {
-                    "url": video_url
-                },
-                "Summary": {
-                    "rich_text": [
-                        {
-                            "text": {
-                                "content": summary
-                            }
-                        }
-                    ]
-                },
-                "Created": {
+                "Date": {
                     "date": {
                         "start": datetime.datetime.now().isoformat()
+                    }
+                },
+                "Category": {
+                    "select": {
+                        "name": "Video Summary"
                     }
                 }
             }
             
-            # Add optional properties if they exist
-            if duration:
-                properties["Duration (seconds)"] = {
-                    "number": duration
-                }
-            
-            if video_title:
-                properties["Original Title"] = {
-                    "rich_text": [
-                        {
-                            "text": {
-                                "content": video_title
-                            }
-                        }
-                    ]
-                }
-            
-            # Create the page with transcript as content
+            # Create the page with transcript and summary as content
             page = self.client.pages.create(
                 parent={"database_id": database_id},
                 properties=properties,
                 children=[
+                    {
+                        "object": "block",
+                        "type": "heading_2",
+                        "heading_2": {
+                            "rich_text": [
+                                {
+                                    "type": "text",
+                                    "text": {
+                                        "content": "Summary"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "object": "block",
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [
+                                {
+                                    "type": "text",
+                                    "text": {
+                                        "content": summary
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "object": "block",
+                        "type": "heading_2",
+                        "heading_2": {
+                            "rich_text": [
+                                {
+                                    "type": "text",
+                                    "text": {
+                                        "content": "Video Details"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "object": "block",
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [
+                                {
+                                    "type": "text",
+                                    "text": {
+                                        "content": f"Video URL: {video_url}"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "object": "block",
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [
+                                {
+                                    "type": "text",
+                                    "text": {
+                                        "content": f"Original Title: {video_title or 'N/A'}"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "object": "block",
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [
+                                {
+                                    "type": "text",
+                                    "text": {
+                                        "content": f"Duration: {duration or 'N/A'} seconds"
+                                    }
+                                }
+                            ]
+                        }
+                    },
                     {
                         "object": "block",
                         "type": "heading_2",

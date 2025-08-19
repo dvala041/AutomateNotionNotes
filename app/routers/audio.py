@@ -83,9 +83,14 @@ async def extract_audio_from_url(request: AudioExtractionRequest):
                     video_title=result['title']
                 )
                 
+                print(f"Notion result: {notion_result}")
+                
                 if notion_result['success']:
                     notion_page_id = notion_result['page_id']
                     notion_page_url = notion_result['page_url']
+                    print(f"Successfully created Notion page: {notion_page_url}")
+                else:
+                    print(f"Failed to create Notion page: {notion_result.get('error', 'Unknown error')}")
                     
             except Exception as notion_error:
                 # Don't fail the whole request if Notion fails
