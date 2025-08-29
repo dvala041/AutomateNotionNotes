@@ -11,6 +11,8 @@ class NotionService:
         self, 
         database_id: str, 
         title: str, 
+        category: str,
+        author: str,
         summary: str, 
         transcript: str, 
         video_url: str,
@@ -39,129 +41,88 @@ class NotionService:
                 },
                 "Category": {
                     "select": {
-                        "name": "Video Summary"
+                        "name": category
                     }
+                },
+                "Author": {
+                    "rich_text": [
+                        {
+                            "text": {
+                                "content": author
+                            }
+                        }
+                    ]
                 }
             }
             
-            # Create the page with transcript and summary as content
+            # Create properly formatted content blocks from the summary
+            content_blocks = self._format_summary_to_blocks(summary)
+            
+            # Add video details section
+            content_blocks.extend([
+                {
+                    "object": "block",
+                    "type": "heading_2",
+                    "heading_2": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": {
+                                    "content": "Video Details"
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": {
+                                    "content": f"Original Title: {video_title}\nURL: {video_url}\nDuration: {duration:.1f} seconds" if duration else f"Original Title: {video_title}\nURL: {video_url}"
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    "object": "block",
+                    "type": "heading_2",
+                    "heading_2": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": {
+                                    "content": "Full Transcript"
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": {
+                                    "content": transcript
+                                }
+                            }
+                        ]
+                    }
+                }
+            ])
+            
+            # Create the page with formatted content
             page = self.client.pages.create(
                 parent={"database_id": database_id},
                 properties=properties,
-                children=[
-                    {
-                        "object": "block",
-                        "type": "heading_2",
-                        "heading_2": {
-                            "rich_text": [
-                                {
-                                    "type": "text",
-                                    "text": {
-                                        "content": "Summary"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "object": "block",
-                        "type": "paragraph",
-                        "paragraph": {
-                            "rich_text": [
-                                {
-                                    "type": "text",
-                                    "text": {
-                                        "content": summary
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "object": "block",
-                        "type": "heading_2",
-                        "heading_2": {
-                            "rich_text": [
-                                {
-                                    "type": "text",
-                                    "text": {
-                                        "content": "Video Details"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "object": "block",
-                        "type": "paragraph",
-                        "paragraph": {
-                            "rich_text": [
-                                {
-                                    "type": "text",
-                                    "text": {
-                                        "content": f"Video URL: {video_url}"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "object": "block",
-                        "type": "paragraph",
-                        "paragraph": {
-                            "rich_text": [
-                                {
-                                    "type": "text",
-                                    "text": {
-                                        "content": f"Original Title: {video_title or 'N/A'}"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "object": "block",
-                        "type": "paragraph",
-                        "paragraph": {
-                            "rich_text": [
-                                {
-                                    "type": "text",
-                                    "text": {
-                                        "content": f"Duration: {duration or 'N/A'} seconds"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "object": "block",
-                        "type": "heading_2",
-                        "heading_2": {
-                            "rich_text": [
-                                {
-                                    "type": "text",
-                                    "text": {
-                                        "content": "Full Transcript"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "object": "block",
-                        "type": "paragraph",
-                        "paragraph": {
-                            "rich_text": [
-                                {
-                                    "type": "text",
-                                    "text": {
-                                        "content": transcript
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ]
+                children=content_blocks
             )
             
             return {
@@ -176,6 +137,152 @@ class NotionService:
                 "success": False,
                 "error": f"Failed to create Notion page: {str(e)}"
             }
+    
+    def _format_summary_to_blocks(self, summary: str) -> list:
+        """
+        Convert a plain text summary into properly formatted Notion blocks
+        """
+        blocks = []
+        
+        # Add the main summary heading
+        blocks.append({
+            "object": "block",
+            "type": "heading_2",
+            "heading_2": {
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": "Summary"
+                        }
+                    }
+                ]
+            }
+        })
+        
+        # Split the summary into lines and process line by line for better nesting
+        lines = summary.split('\n')
+        last_block_type = None
+        
+        for line in lines:
+            if not line.strip():
+                continue
+                
+            # Check for numbered list items (1., 2., 3., etc.)
+            if line.strip().startswith(tuple(f'{i}.' for i in range(1, 21))):
+                # Extract the content after the number
+                content = line.strip()
+                # Remove the number and period, keep the colon if present
+                for i in range(1, 21):
+                    if content.startswith(f'{i}.'):
+                        content = content[len(f'{i}.'):].strip()
+                        break
+                
+                block = {
+                    "object": "block",
+                    "type": "numbered_list_item",
+                    "numbered_list_item": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": {
+                                    "content": content
+                                }
+                            }
+                        ]
+                    }
+                }
+                
+                # If the previous block was a numbered list, add sub-items as children
+                if last_block_type == "numbered_list_item" and len(blocks) > 1:
+                    # Add as children to the last numbered list item
+                    if "children" not in blocks[-1]["numbered_list_item"]:
+                        blocks[-1]["numbered_list_item"]["children"] = []
+                    # But actually, Notion doesn't support children in this way, so just add normally
+                
+                blocks.append(block)
+                last_block_type = "numbered_list_item"
+                
+            # Check for letter sub-items (a., b., c., etc.)
+            elif line.strip().startswith(('a.', 'b.', 'c.', 'd.', 'e.', 'f.', 'g.', 'h.')):
+                # Extract content after the letter
+                content = line.strip()[2:].strip()
+                
+                blocks.append({
+                    "object": "block",
+                    "type": "bulleted_list_item",
+                    "bulleted_list_item": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": {
+                                    "content": content
+                                }
+                            }
+                        ]
+                    }
+                })
+                last_block_type = "bulleted_list_item"
+                
+            # Check for bullet points (•)
+            elif '•' in line:
+                bullet_text = line.split('•', 1)[-1].strip()
+                
+                # If this bullet follows a numbered item, treat it as a sub-item
+                if last_block_type == "numbered_list_item":
+                    # Create a bulleted list item that will appear indented
+                    blocks.append({
+                        "object": "block",
+                        "type": "bulleted_list_item",
+                        "bulleted_list_item": {
+                            "rich_text": [
+                                {
+                                    "type": "text",
+                                    "text": {
+                                        "content": bullet_text
+                                    }
+                                }
+                            ]
+                        }
+                    })
+                    last_block_type = "bulleted_list_item"
+                else:
+                    # Regular bullet point
+                    blocks.append({
+                        "object": "block",
+                        "type": "bulleted_list_item",
+                        "bulleted_list_item": {
+                            "rich_text": [
+                                {
+                                    "type": "text",
+                                    "text": {
+                                        "content": bullet_text
+                                    }
+                                }
+                            ]
+                        }
+                    })
+                    last_block_type = "bulleted_list_item"
+                    
+            # Regular text line
+            else:
+                blocks.append({
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": {
+                                    "content": line.strip()
+                                }
+                            }
+                        ]
+                    }
+                })
+                last_block_type = "paragraph"
+        
+        return blocks
     
     def list_databases(self) -> Dict[str, Any]:
         """
